@@ -231,30 +231,14 @@ function buildTeamStats(teamAppearances) {
   return stats;
 }
 
-// Small prestige bump for traditional powerhouses so they feel a bit
-// stronger and the draft/sim stays dynamic. Kept modest on purpose.
-const POWERHOUSE_BOOST = {
-  BRA: 4, // Brazil
-  ARG: 4, // Argentina
-  DEU: 4, // Germany / West Germany
-  ITA: 3, // Italy
-  FRA: 3, // France
-  ESP: 3, // Spain
-  ENG: 2, // England
-  NLD: 2, // Netherlands
-  URY: 2, // Uruguay
-  PRT: 2, // Portugal
-};
-
-function teamStrength(performance, stats, teamCode) {
+function teamStrength(performance, stats) {
   const played = stats?.played || 0;
   const winRate = played > 0 ? stats.wins / played : 0.25;
   const gdPerMatch = played > 0 ? (stats.gf - stats.ga) / played : 0;
-  const prestige = POWERHOUSE_BOOST[teamCode] ?? 0;
   return clamp(
-    Math.round(61 + performanceBonus(performance) + winRate * 8 + gdPerMatch * 1.8 + prestige),
+    Math.round(61 + performanceBonus(performance) + winRate * 8 + gdPerMatch * 1.8),
     56,
-    94
+    92
   );
 }
 
@@ -407,7 +391,7 @@ function buildRosterGroups(squads, qualifiedTeams, teamAppearances, overrides, p
     const key = `${row.tournament_id}:${row.team_code}`;
     const perf = performance.get(key) ?? 'group stage';
     const teamStats = stats.get(key) ?? null;
-    const strength = teamStrength(perf, teamStats, row.team_code);
+    const strength = teamStrength(perf, teamStats);
     const rosterId = `${row.team_code}-${year}`;
 
     if (!groups.has(key)) {

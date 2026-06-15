@@ -24,11 +24,14 @@ export function rollRoster(state: DraftState, rosters: Roster[]): DraftState {
   const available = rosters.filter((roster) => !recent.has(roster.id) && !pickedTeams.has(roster.teamCode));
   const pool = available.length > 0 ? available : rosters;
 
+  // Roll frequency: nudge strong nations up a bit so squads don't end up
+  // too weak, while keeping plenty of variety (kept modest on purpose).
   const weights = pool.map((roster) => {
-    if (roster.strength >= 88) return 0.55;
-    if (roster.strength >= 82) return 0.85;
-    if (roster.strength <= 66) return 1.35;
-    return 1.15;
+    if (roster.strength >= 88) return 1.25;
+    if (roster.strength >= 82) return 1.2;
+    if (roster.strength >= 74) return 1.05;
+    if (roster.strength <= 66) return 0.8;
+    return 1;
   });
 
   const currentRoster = weightedPick(rng, pool, weights);
