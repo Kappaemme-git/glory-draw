@@ -237,12 +237,7 @@ export function App() {
 
   function choosePlayer(player: Player, slot?: Slot) {
     if (!dataset) return;
-    if (draft.picks.length < 10) startRolling();
-    setDraft((state) => {
-      const next = pickPlayer(state, player, slot?.id);
-      if (next.picks.length === state.picks.length || isComplete(next)) return next;
-      return rollRoster(next, dataset.rosters);
-    });
+    setDraft((state) => pickPlayer(state, player, slot?.id));
     setSelectedPlayer(null);
     scrollToPanel('.roll-panel');
   }
