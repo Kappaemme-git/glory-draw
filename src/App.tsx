@@ -481,7 +481,7 @@ export function App() {
                         if (pick) setDraft((state) => removePick(state, slot.id));
                       }}
                     >
-                      <span className="disc">{pick ? pick.player.overall : slot.label}</span>
+                      <span className="disc">{pick ? pick.player.overall : positionLabels[slot.position]}</span>
                       <span className="slot-name">{pick ? pick.player.displayName : positionLabels[slot.position]}</span>
                       {pick && (
                         <small>
@@ -539,7 +539,7 @@ export function App() {
                       <small>
                         {pick
                           ? `${flagFor(pick.sourceRoster.teamCode)} ${pick.sourceRoster.teamCode} ${pick.sourceRoster.year}`
-                          : slot.label}
+                          : positionLabels[slot.position]}
                       </small>
                     </button>
                   );
