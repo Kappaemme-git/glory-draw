@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, CalendarDays, Dices, Github, Play, RotateCcw, Share2, Trophy, UsersRound, Wand2 } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Dices, Github, Lock, Play, RotateCcw, Share2, Trophy, UsersRound, Wand2 } from 'lucide-react';
 import { flagFor } from './flags';
 import { autoDraft, createDraft, isComplete, pickPlayer, removePick, rerollRoster, rollRoster } from './engine/draft';
 import { defaultFormation, formations } from './engine/formations';
@@ -444,8 +444,12 @@ export function App() {
                       <span className="player-main">
                         <strong>{player.displayName}</strong>
                         <small>
-                          {player.positions.map((pos) => positionLabels[pos]).join('/')} ·{' '}
-                          {unavailable ? 'role filled' : `${slots.length} slots`}
+                          {player.positions.map((pos) => positionLabels[pos]).join('/')}
+                          {unavailable ? (
+                            <span className="filled-tag"><Lock size={11} strokeWidth={2.5} /> Filled</span>
+                          ) : (
+                            <> · {slots.length} {slots.length === 1 ? 'slot' : 'slots'}</>
+                          )}
                         </small>
                       </span>
                       <span className={`overall ${overallTier(player.overall)}`.trim()}>{player.overall}</span>
