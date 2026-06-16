@@ -1,6 +1,6 @@
 import React from 'react';
-import { AbsoluteFill, Audio, Sequence, staticFile } from 'remotion';
-import { scenes } from './theme';
+import { AbsoluteFill, Audio, interpolate, Sequence, staticFile } from 'remotion';
+import { scenes, VIDEO } from './theme';
 import { IntroScene } from './scenes/IntroScene';
 import { ConceptScene } from './scenes/ConceptScene';
 import { RollScene } from './scenes/RollScene';
@@ -22,8 +22,21 @@ const Sfx: React.FC<{ at: number; file: string; volume?: number }> = ({
 const bounceFrames = [0, 18, 33, 45, 54].map((f) => scenes.outro.from + f);
 
 export const GloryDrawPromo: React.FC = () => {
+  const fadeOutStart = VIDEO.durationInFrames - 36;
   return (
     <AbsoluteFill>
+      {/* original anthemic music bed (synthesized, copyright-free) */}
+      <Audio
+        src={staticFile('music/anthem.wav')}
+        volume={(f) =>
+          interpolate(
+            f,
+            [0, 12, fadeOutStart, VIDEO.durationInFrames],
+            [0, 0.62, 0.62, 0],
+            { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
+          )
+        }
+      />
       <Sequence from={scenes.intro.from} durationInFrames={scenes.intro.durationInFrames}>
         <IntroScene />
       </Sequence>
@@ -43,15 +56,15 @@ export const GloryDrawPromo: React.FC = () => {
         <OutroScene />
       </Sequence>
 
-      {/* audio */}
-      <Sfx at={6} file="whistle.wav" volume={0.5} />
-      <Sfx at={scenes.concept.from} file="swoosh.wav" volume={0.4} />
-      <Sfx at={scenes.roll.from} file="swoosh.wav" volume={0.4} />
-      <Sfx at={scenes.pick.from} file="swoosh.wav" volume={0.4} />
-      <Sfx at={scenes.simulate.from} file="whistle.wav" volume={0.45} />
-      <Sfx at={scenes.outro.from} file="swoosh.wav" volume={0.4} />
+      {/* SFX (kept a touch below the music) */}
+      <Sfx at={6} file="whistle.wav" volume={0.42} />
+      <Sfx at={scenes.concept.from} file="swoosh.wav" volume={0.28} />
+      <Sfx at={scenes.roll.from} file="swoosh.wav" volume={0.28} />
+      <Sfx at={scenes.pick.from} file="swoosh.wav" volume={0.28} />
+      <Sfx at={scenes.simulate.from} file="whistle.wav" volume={0.38} />
+      <Sfx at={scenes.outro.from} file="swoosh.wav" volume={0.28} />
       {bounceFrames.map((f, i) => (
-        <Sfx key={i} at={f} file="bounce.wav" volume={0.55} />
+        <Sfx key={i} at={f} file="bounce.wav" volume={0.45} />
       ))}
     </AbsoluteFill>
   );

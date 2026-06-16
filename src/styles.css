@@ -2235,6 +2235,46 @@ h3 {
   line-height: 1;
 }
 
+/* support / buy-me-a-coffee */
+.source-note a.support-btn {
+  color: var(--ink);
+  background: var(--gold);
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  padding: 8px 16px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  box-shadow: var(--hard-sm);
+  transition: transform 0.14s ease, box-shadow 0.14s ease;
+}
+
+.source-note a.support-btn:hover {
+  color: var(--ink);
+  transform: translateY(-2px);
+  box-shadow: var(--hard);
+}
+
+.support-coffee {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  border: 2px solid var(--ink);
+  background: var(--gold);
+  color: var(--ink);
+  text-decoration: none;
+  box-shadow: var(--hard-sm);
+  transition: transform 0.14s ease, box-shadow 0.14s ease;
+}
+
+.support-coffee:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--hard);
+}
+
 /* ---------- RESPONSIVE ---------- */
 /* desktop: keep the whole draft inside one screen */
 @media (min-width: 1101px) {

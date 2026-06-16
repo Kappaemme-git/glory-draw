@@ -1,11 +1,14 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, CalendarDays, Dices, Github, Lock, Play, RotateCcw, Share2, Trophy, UsersRound, Wand2 } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Coffee, Dices, Github, Lock, Play, RotateCcw, Share2, Trophy, UsersRound, Wand2 } from 'lucide-react';
 import { flagFor } from './flags';
 import { autoDraft, createDraft, isComplete, pickPlayer, removePick, rerollRoster, rollRoster } from './engine/draft';
 import { defaultFormation, formations } from './engine/formations';
 import { eligibleSlots, ratingsFromPicks, slotById } from './engine/ratings';
 import { simulateWorldCup } from './engine/simulate';
 import type { Dataset, DraftState, GroupStanding, MatchEvent, MatchResult, Player, Position, SimulationResult, Slot } from './types';
+
+// Stripe payment link — buy me a coffee / support the game.
+const SUPPORT_URL = 'https://buy.stripe.com/00w5kD4yTexf8Jy8bu57W04';
 
 const positionLabels: Record<string, string> = {
   GK: 'GK',
@@ -267,6 +270,16 @@ export function App() {
       {started ? (
         <header className="gamebar">
           <Logo onClick={goHome} />
+          <a
+            className="support-coffee"
+            href={SUPPORT_URL}
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Support the game"
+            title="Support the game"
+          >
+            <Coffee size={18} />
+          </a>
         </header>
       ) : (
         <header className="topbar">
@@ -552,6 +565,10 @@ export function App() {
 
       {!started && (
         <footer className="source-note">
+          <a className="support-btn" href={SUPPORT_URL} target="_blank" rel="noreferrer" aria-label="Support the game">
+            <Coffee size={16} />
+            Support the game
+          </a>
           <span>Created by @Kappaemme</span>
           <a href="https://github.com/Kappaemme-git" target="_blank" rel="noreferrer" aria-label="Kappaemme on GitHub">
             <Github size={15} />
