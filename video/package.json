@@ -1,0 +1,26 @@
+{
+  "name": "glory-draw-video",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Remotion promo video for Glory Draw",
+  "scripts": {
+    "capture": "node scripts/capture-screens.mjs",
+    "sfx": "node scripts/generate-sfx.mjs",
+    "studio": "remotion studio src/index.ts",
+    "still": "remotion still src/index.ts GloryDrawPromo out/frame.png",
+    "render": "remotion render src/index.ts GloryDrawPromo out/glory-draw.mp4",
+    "render:gif": "remotion render src/index.ts GloryDrawPromo out/glory-draw.gif --codec=gif"
+  },
+  "dependencies": {
+    "@remotion/google-fonts": "4.0.378",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "remotion": "4.0.378"
+  },
+  "devDependencies": {
+    "@remotion/cli": "4.0.378",
+    "@types/react": "19.0.0",
+    "puppeteer-core": "^23.0.0",
+    "typescript": "^5.6.0"
+  }
+}
