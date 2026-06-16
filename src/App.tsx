@@ -484,7 +484,7 @@ export function App() {
                         pick ? 'filled' : '',
                         canReceive ? 'target' : '',
                       ].join(' ')}
-                      style={{ left: `${slot.x}%`, top: `${slot.y}%` }}
+                      style={{ left: `${slot.x}%`, top: `${slot.y}%`, zIndex: canReceive ? 100 : Math.round(slot.y) }}
                       type="button"
                       onClick={() => {
                         if (selectedPlayer) {
