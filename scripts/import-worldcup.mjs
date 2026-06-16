@@ -3,6 +3,14 @@ import path from 'node:path';
 
 const ROOT =
   'https://raw.githubusercontent.com/jfjelstul/worldcup/master/data-csv';
+const TRANSFERMARKT = {
+  profiles:
+    'https://raw.githubusercontent.com/salimt/football-datasets/main/datalake/transfermarkt/player_profiles/player_profiles.csv',
+  marketValues:
+    'https://raw.githubusercontent.com/salimt/football-datasets/main/datalake/transfermarkt/player_market_value/player_market_value.csv',
+  performances:
+    'https://media.githubusercontent.com/media/salimt/football-datasets/main/datalake/transfermarkt/player_performances/player_performances.csv',
+};
 
 const OUT_FILE = path.resolve('public/data/worldcup-rosters.json');
 const OVERRIDES_FILE = path.resolve('data/player-overrides.json');
@@ -96,6 +104,76 @@ function parseCsv(text) {
   );
 }
 
+function parseCsvLine(line) {
+  const values = [];
+  let field = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    const next = line[i + 1];
+
+    if (char === '"') {
+      if (inQuotes && next === '"') {
+        field += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (char === ',' && !inQuotes) {
+      values.push(field);
+      field = '';
+      continue;
+    }
+
+    field += char;
+  }
+
+  values.push(field);
+  return values;
+}
+
+async function processCsvRows(url, onRow) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Cannot fetch ${url}: HTTP ${res.status}`);
+  if (!res.body) throw new Error(`Cannot read streamed CSV ${url}`);
+
+  const decoder = new TextDecoder();
+  const reader = res.body.getReader();
+  let buffer = '';
+  let headers = null;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split(/\r?\n/);
+    buffer = lines.pop() ?? '';
+
+    for (const line of lines) {
+      if (!line) continue;
+      const values = parseCsvLine(line);
+      if (!headers) {
+        headers = values;
+      } else {
+        await onRow(Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ''])));
+      }
+    }
+  }
+
+  buffer += decoder.decode();
+  if (buffer.trim()) {
+    const values = parseCsvLine(buffer);
+    if (headers) {
+      await onRow(Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ''])));
+    }
+  }
+}
+
 async function getCsv(name) {
   const res = await fetch(`${ROOT}/${name}`);
   if (!res.ok) throw new Error(`Cannot fetch ${name}: HTTP ${res.status}`);
@@ -148,10 +226,30 @@ function fullName(row) {
   return [cleanNamePart(row.given_name), cleanNamePart(row.family_name)].filter(Boolean).join(' ').trim();
 }
 
+function transfermarktName(value) {
+  return String(value ?? '')
+    .replace(/\s+\(\d+\)\s*$/, '')
+    .trim();
+}
+
 function shortName(name) {
   const parts = name.split(/\s+/).filter(Boolean);
   if (parts.length <= 2) return name;
   return `${parts[0][0]}. ${parts.at(-1)}`;
+}
+
+function worldCupRatingDate(year) {
+  // Qatar 2022 was winter; every other imported World Cup is a summer tournament.
+  return Date.UTC(year, year === 2022 ? 10 : 5, year === 2022 ? 20 : 1);
+}
+
+function twoDigitYear(year) {
+  return String(year % 100).padStart(2, '0');
+}
+
+function worldCupSeasons(year) {
+  const euroSeason = `${twoDigitYear(year - 1)}/${twoDigitYear(year)}`;
+  return year === 2022 ? ['22/23', '2022'] : [euroSeason, String(year)];
 }
 
 function performanceBonus(performance) {
@@ -320,6 +418,172 @@ function buildPlayerStats(playerApps, goalsCsv, awardWinners, playersCsv) {
   return { apps, appearanceTournaments, goals, awardBoost, countTournaments };
 }
 
+function emptyTransfermarktEntry() {
+  return {
+    marketValue: 0,
+    marketDateDistance: Number.POSITIVE_INFINITY,
+    apps: 0,
+    starts: 0,
+    goals: 0,
+    assists: 0,
+    minutes: 0,
+    goalsConceded: 0,
+    cleanSheets: 0,
+  };
+}
+
+function transfermarktKey(playerId, year) {
+  return `${playerId}:${year}`;
+}
+
+function transfermarktProfileKey(name, birthDate) {
+  return `${normalizeName(name)}|${birthDate}`;
+}
+
+function addNumber(target, key, value) {
+  const parsed = Number(value || 0);
+  if (Number.isFinite(parsed)) target[key] += parsed;
+}
+
+async function buildTransfermarktStats(squads, playersCsv) {
+  const playerIndex = new Map();
+  for (const row of playersCsv) {
+    if (row.female === '1') continue;
+    const name = fullName(row);
+    if (!name || !row.birth_date) continue;
+    playerIndex.set(transfermarktProfileKey(name, row.birth_date), row.player_id);
+  }
+
+  const transfermarktByPlayer = new Map();
+  let matchedProfiles = 0;
+  await processCsvRows(TRANSFERMARKT.profiles, (row) => {
+    const playerId = playerIndex.get(transfermarktProfileKey(transfermarktName(row.player_name), row.date_of_birth));
+    if (!playerId) return;
+    transfermarktByPlayer.set(playerId, row.player_id);
+    matchedProfiles += 1;
+  });
+
+  const targets = new Map();
+  const targetsByTransfermarktId = new Map();
+  const targetsByTransfermarktSeason = new Map();
+
+  for (const row of squads) {
+    if (!row.tournament_name.includes("FIFA Men's World Cup")) continue;
+    const year = yearFromTournamentId(row.tournament_id);
+    if (!year || year < MIN_WORLD_CUP_YEAR) continue;
+
+    const tmId = transfermarktByPlayer.get(row.player_id);
+    if (!tmId) continue;
+
+    const key = transfermarktKey(row.player_id, year);
+    if (!targets.has(key)) {
+      targets.set(key, {
+        ...emptyTransfermarktEntry(),
+        playerId: row.player_id,
+        transfermarktId: tmId,
+        year,
+        positionCode: row.position_code,
+        ratingDate: worldCupRatingDate(year),
+      });
+    }
+
+    const byId = targetsByTransfermarktId.get(tmId) ?? [];
+    byId.push(targets.get(key));
+    targetsByTransfermarktId.set(tmId, byId);
+
+    for (const season of worldCupSeasons(year)) {
+      const seasonKey = `${tmId}:${season}`;
+      const bySeason = targetsByTransfermarktSeason.get(seasonKey) ?? [];
+      bySeason.push(targets.get(key));
+      targetsByTransfermarktSeason.set(seasonKey, bySeason);
+    }
+  }
+
+  await processCsvRows(TRANSFERMARKT.marketValues, (row) => {
+    const entries = targetsByTransfermarktId.get(row.player_id);
+    if (!entries) return;
+
+    const value = Number(row.value || 0);
+    if (!Number.isFinite(value) || value <= 0) return;
+    const date = Date.parse(row.date_unix);
+    if (!Number.isFinite(date)) return;
+
+    for (const entry of entries) {
+      const distance = Math.abs(date - entry.ratingDate);
+      // Ignore stale market values; older eras and missing years should fall back
+      // to the tournament model instead of borrowing a value from years later.
+      if (distance > 900 * 24 * 60 * 60 * 1000) continue;
+      if (distance < entry.marketDateDistance) {
+        entry.marketDateDistance = distance;
+        entry.marketValue = value;
+      }
+    }
+  });
+
+  await processCsvRows(TRANSFERMARKT.performances, (row) => {
+    const entries = targetsByTransfermarktSeason.get(`${row.player_id}:${row.season_name}`);
+    if (!entries) return;
+
+    for (const entry of entries) {
+      addNumber(entry, 'apps', row.nb_on_pitch);
+      addNumber(entry, 'starts', row.nb_in_group);
+      addNumber(entry, 'goals', row.goals);
+      addNumber(entry, 'assists', row.assists);
+      addNumber(entry, 'minutes', row.minutes_played);
+      addNumber(entry, 'goalsConceded', row.goals_conceded);
+      addNumber(entry, 'cleanSheets', row.clean_sheets);
+    }
+  });
+
+  const values = [...targets.values()].filter(
+    (entry) => entry.marketValue > 0 || entry.apps > 0 || entry.goals > 0 || entry.assists > 0
+  );
+
+  return {
+    byPlayerYear: new Map(values.map((entry) => [transfermarktKey(entry.playerId, entry.year), entry])),
+    count: values.length,
+    matchedProfiles,
+  };
+}
+
+function marketValueRating(value) {
+  if (!value || value <= 0) return null;
+  return clamp(Math.round(58 + Math.log10(value / 100000) * 10.5), 55, 89);
+}
+
+function transfermarktOverall(entry, positionCode, rosterStrength) {
+  if (!entry) return null;
+
+  const marketRating = marketValueRating(entry.marketValue);
+  let value = marketRating ?? rosterStrength;
+  const apps = Math.max(0, entry.apps || 0);
+  const goals = Math.max(0, entry.goals || 0);
+  const assists = Math.max(0, entry.assists || 0);
+
+  if (apps >= 35) value += 2;
+  else if (apps >= 25) value += 1;
+  else if (apps >= 15) value += 0;
+  else if (apps > 0) value -= 2;
+
+  if (positionCode === 'GK') {
+    value += clamp(Math.round((entry.cleanSheets || 0) / 10), 0, 2);
+    if (apps >= 20 && entry.goalsConceded > 0) {
+      const concededPerGame = entry.goalsConceded / apps;
+      if (concededPerGame < 0.8) value += 2;
+      else if (concededPerGame > 1.5) value -= 1;
+    }
+  } else if (positionCode === 'DF') {
+    value += clamp(Math.round((goals * 0.3 + assists * 0.25)), 0, 2);
+  } else if (positionCode === 'MF') {
+    value += clamp(Math.round((goals * 0.18 + assists * 0.25)), 0, 3);
+  } else if (positionCode === 'FW') {
+    value += clamp(Math.round((goals * 0.18 + assists * 0.15)), 0, 3);
+  }
+
+  if (marketRating) value = Math.min(value, marketRating + 4);
+  return clamp(Math.round(value), 52, 92);
+}
+
 function playerOverall(row, rosterStrength, override, year, playerStats, teamMatches) {
   if (override?.overallByYear?.[year]) return override.overallByYear[year];
   if (override?.overall) return override.overall;
@@ -367,6 +631,13 @@ function playerOverall(row, rosterStrength, override, year, playerStats, teamMat
 
   // tiny deterministic jitter so equal players are not perfectly tied
   value += (hashNumber(pkey) % 3) - 1;
+
+  const transfermarktRating = transfermarktOverall(
+    playerStats.transfermarkt.byPlayerYear.get(transfermarktKey(row.player_id, year)),
+    row.position_code,
+    rosterStrength
+  );
+  if (transfermarktRating) value = Math.max(value, transfermarktRating);
 
   return clamp(Math.round(value), 47, 95);
 }
@@ -467,7 +738,11 @@ async function main() {
       getCsv('players.csv'),
     ]);
 
-  const playerStats = buildPlayerStats(playerApps, goalsCsv, awardWinners, playersCsv);
+  const transfermarkt = await buildTransfermarktStats(squads, playersCsv);
+  const playerStats = {
+    ...buildPlayerStats(playerApps, goalsCsv, awardWinners, playersCsv),
+    transfermarkt,
+  };
   const rosters = buildRosterGroups(squads, qualifiedTeams, teamAppearances, overrides, playerStats);
   const players = rosters.reduce((sum, roster) => sum + roster.players.length, 0);
   const payload = {
@@ -476,10 +751,12 @@ async function main() {
       name: 'The Fjelstul World Cup Database',
       url: 'https://github.com/jfjelstul/worldcup',
       license: 'CC-BY-SA 4.0',
-      note: `Imported from public CSV files from ${MIN_WORLD_CUP_YEAR} onward. Overalls are derived from official tournament data (appearances/starts, goals, individual awards, World Cup longevity) blended with team strength, plus manual overrides in data/player-overrides.json.`,
+      note: `Imported from public CSV files from ${MIN_WORLD_CUP_YEAR} onward. Overalls are derived from official tournament data (appearances/starts, goals, individual awards, World Cup longevity), Transfermarkt-derived season signals (market value and role-specific club production where matched), team strength, plus manual overrides in data/player-overrides.json.`,
     },
     overrides: {
       players: overrides.count,
+      transfermarktMatchedProfiles: transfermarkt.matchedProfiles,
+      transfermarktPlayerYears: transfermarkt.count,
     },
     counts: {
       rosters: rosters.length,
